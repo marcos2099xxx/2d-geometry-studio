@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Crea y Analiza tu Composición 2D</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+            -webkit-tap-highlight-color: transparent;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; 
+            overflow: hidden; 
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: white;
+            position: fixed;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        #camera-container { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100vh; 
+            z-index: 1;
+            overflow: hidden;
+        }
+        
+        #video { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            opacity: 0.5;
+            filter: blur(2px);
+        }
+        
+        #canvas3d { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100vh; 
+            z-index: 2; 
+            touch-action: none;
+        }
+
+        #ui-layer { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 100; 
+            pointer-events: none; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between;
+        }
+
+        #header {
+            pointer-events: auto;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.7) 100%);
+            backdrop-filter: blur(12px);
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(56, 189, 248, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        #header h1 {
+            font-size: 18px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.5px;
+        }
+
+        #header p {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+        
+        #info-panel { 
+            pointer-events: auto; 
+            background: rgba(15, 23, 42, 0.97); 
+            backdrop-filter: blur(16px); 
+            padding: 16px; 
+            border-radius: 20px 20px 0 0; 
+            border-top: 2px solid rgba(56, 189, 248, 0.4);
+            max-height: 45vh; 
+            overflow-y: auto; 
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.8);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        #info-panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #info-panel::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.4);
+            border-radius: 3px;
+        }
+
+        #math-results {
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border-radius: 12px; 
+            padding: 12px;
+            margin-bottom: 12px; 
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            display: none;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.1);
+        }
+        
+        .math-row { 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center;
+            margin-bottom: 6px; 
+            font-size: 13px;
+            padding: 4px 0;
+        }
+        
+        .math-row:not(:last-child) {
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        .math-row span {
+            color: #cbd5e1;
+            font-weight: 500;
+        }
+        
+        .math-row strong { 
+            color: #38bdf8;
+            font-weight: 700;
+            font-size: 14px;
+        }
+        
+        .formula-box { 
+            font-family: 'SF Mono', 'Courier New', monospace; 
+            font-size: 10px; 
+            color: #94a3b8; 
+            margin-top: 8px; 
+            padding-top: 8px; 
+            border-top: 1px solid rgba(255,255,255,0.15);
+            line-height: 1.4;
+        }
+
+        .controls-grid { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 8px; 
+            margin-bottom: 10px; 
+        }
+        
+        .full-width { 
+            grid-column: span 2; 
+        }
+        
+        label { 
+            display: block; 
+            color: #94a3b8; 
+            font-size: 10px; 
+            font-weight: 700; 
+            margin-bottom: 4px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+        }
+        
+        select, input[type="number"] { 
+            width: 100%; 
+            padding: 10px 12px; 
+            background: rgba(0,0,0,0.4); 
+            border: 1px solid rgba(255,255,255,0.2); 
+            border-radius: 10px; 
+            font-size: 14px; 
+            color: #fff; 
+            outline: none;
+            transition: all 0.2s;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        select:focus, input[type="number"]:focus {
+            border-color: #38bdf8;
+            background: rgba(0,0,0,0.5);
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.1);
+        }
+
+        select {
+            background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L6 6L11 1' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        input[type=range] { 
+            -webkit-appearance: none; 
+            width: 100%;
+            background: transparent; 
+            margin: 8px 0;
+            height: 24px;
+        }
+        
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; 
+            height: 22px; 
+            width: 22px; 
+            border-radius: 50%;
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+            margin-top: -9px;
+            border: 2px solid white;
+        }
+        
+        input[type=range]::-webkit-slider-runnable-track { 
+            width: 100%; 
+            height: 4px; 
+            background: rgba(255,255,255,0.2); 
+            border-radius: 2px;
+        }
+
+        input[type=range]::-moz-range-thumb {
+            height: 22px; 
+            width: 22px; 
+            border-radius: 50%;
+            background: linear-gradient(135deg, #38bdf8, #3b82f6);
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+            border: 2px solid white;
+        }
+
+        input[type=range]::-moz-range-track {
+            width: 100%; 
+            height: 4px; 
+            background: rgba(255,255,255,0.2); 
+            border-radius: 2px;
+        }
+
+        .section-label {
+            color: #e2e8f0;
+            font-size: 10px;
+            font-weight: 700;
+            margin: 12px 0 8px 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .skin-scroll { 
+            display: flex; 
+            gap: 8px; 
+            overflow-x: auto; 
+            padding-bottom: 8px;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x mandatory;
+        }
+
+        .skin-scroll::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .skin-scroll::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.4);
+            border-radius: 2px;
+        }
+        
+        .skin-btn {
+            min-width: 50px; 
+            height: 50px; 
+            border-radius: 10px; 
+            border: 2px solid rgba(255,255,255,0.2);
+            background-size: cover; 
+            background-position: center; 
+            transition: all 0.2s;
+            cursor: pointer;
+            scroll-snap-align: start;
+            position: relative;
+        }
+
+        .skin-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .skin-btn:active::after {
+            opacity: 1;
+        }
+        
+        .skin-btn.active { 
+            border-color: #38bdf8; 
+            transform: scale(1.05); 
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.5);
+        }
+
+        .btn-group { 
+            display: flex; 
+            gap: 10px; 
+            margin-top: 12px; 
+        }
+        
+        #createBtn { 
+            flex: 2; 
+            padding: 12px; 
+            background: linear-gradient(135deg, #38bdf8, #3b82f6); 
+            border: none; 
+            border-radius: 12px; 
+            color: white; 
+            font-weight: 800; 
+            text-transform: uppercase;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+        }
+
+        #createBtn:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(56, 189, 248, 0.4);
+        }
+        
+        .btn-secondary {
+            flex: 1; 
+            padding: 12px;
+            background: rgba(255,255,255,0.1); 
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 12px; 
+            color: white; 
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .btn-secondary:active {
+            transform: scale(0.98);
+            background: rgba(255,255,255,0.15);
+        }
+
+        @media (max-width: 400px) {
+            #header h1 {
+                font-size: 16px;
+            }
+
+            #header p {
+                font-size: 10px;
+            }
+
+            #info-panel {
+                padding: 14px;
+            }
+
+            .controls-grid {
+                gap: 8px;
+            }
+
+            .skin-btn {
+                min-width: 45px;
+                height: 45px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="camera-container">
+        <video id="video" autoplay playsinline muted></video>
+    </div>
+
+    <div id="ui-layer">
+        <div id="header">
+            <h1>Crea y Analiza tu Composición 2D</h1>
+            <p>Construye figuras geométricas con análisis matemático en tiempo real</p>
+        </div>
+
+        <div id="info-panel">
+            
+            <div id="math-results">
+                <div class="math-row">
+                    <span>Perímetro</span>
+                    <strong id="res-perim">0 cm</strong>
+                </div>
+                <div class="math-row">
+                    <span>Área</span>
+                    <strong id="res-area">0 cm²</strong>
+                </div>
+                <div class="formula-box" id="res-formulas"></div>
+            </div>
+
+            <div class="controls-grid">
+                <div class="full-width">
+                    <label>Figura Geométrica</label>
+                    <select id="shapeSelect">
+                        <option value="square">Cuadrado</option>
+                        <option value="rectangle">Rectángulo</option>
+                        <option value="triangle">Triángulo Equilátero</option>
+                        <option value="pentagon">Pentágono Regular</option>
+                        <option value="circle">Círculo</option>
+                    </select>
+                </div>
+                <div id="input1-box">
+                    <label id="lbl1">Lado (cm)</label>
+                    <input type="number" id="dim1" value="4" min="0.1" step="0.1">
+                </div>
+                <div id="input2-box" style="display:none">
+                    <label>Alto (cm)</label>
+                    <input type="number" id="dim2" value="6" min="0.1" step="0.1">
+                </div>
+            </div>
+
+            <label>Rotación: <span id="rotation-value">0°</span></label>
+            <input type="range" id="rotation" min="0" max="360" value="0">
+
+            <div class="section-label">Texturas y Colores</div>
+            <div class="skin-scroll" id="skinList"></div>
+
+            <div class="btn-group">
+                <button class="btn-secondary" id="clearBtn">Limpiar</button>
+                <button id="createBtn">Crear Figura</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, raycaster, mouse;
+        let objects = []; 
+        let selectedObject = null;
+        let selectionBox;
+        let textureLoader;
+        let selectedSkin = { type: 'color', value: '#38bdf8' };
+
+        const SKINS = [
+            { name: 'Azul', type: 'color', value: '#38bdf8' },
+            { name: 'Rojo', type: 'color', value: '#ef4444' },
+            { name: 'Verde', type: 'color', value: '#10b981' },
+            { name: 'Amarillo', type: 'color', value: '#fbbf24' },
+            { name: 'Púrpura', type: 'color', value: '#a855f7' },
+            { name: 'Naranja', type: 'color', value: '#f97316' },
+            { name: 'Rosa', type: 'color', value: '#ec4899' },
+            { name: 'Cian', type: 'color', value: '#06b6d4' },
+            { name: 'Gris', type: 'color', value: '#6b7280' },
+            { name: 'Oro', type: 'color', value: '#fbbf24' }
+        ];
+
+        function init() {
+            const video = document.getElementById('video');
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    } 
+                })
+                .then(stream => {
+                    video.srcObject = stream;
+                })
+                .catch(err => {
+                    console.log('Cámara no disponible:', err);
+                    document.getElementById('camera-container').style.display = 'none';
+                });
+            }
+
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 22;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.domElement.id = 'canvas3d';
+            document.body.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+            const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+            dl.position.set(5, 10, 7);
+            scene.add(dl);
+
+            textureLoader = new THREE.TextureLoader();
+            raycaster = new THREE.Raycaster();
+            mouse = new THREE.Vector2();
+
+            selectionBox = new THREE.BoxHelper(new THREE.Mesh(), 0xffff00);
+            selectionBox.visible = false;
+            scene.add(selectionBox);
+
+            generateSkinUI();
+            setupInteraction();
+            updateUIInputs();
+            setupEventListeners();
+            animate();
+            
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function setupEventListeners() {
+            document.getElementById('shapeSelect').addEventListener('change', updateUIInputs);
+            document.getElementById('rotation').addEventListener('input', rotateSelected);
+            document.getElementById('createBtn').addEventListener('click', addShape);
+            document.getElementById('clearBtn').addEventListener('click', clearScene);
+        }
+
+        function calculateMath(shape, v1, v2) {
+            let area = 0, perimeter = 0, formulas = "";
+
+            switch(shape) {
+                case 'square':
+                    perimeter = v1 * 4; 
+                    area = v1 * v1;
+                    formulas = `P = 4L = 4(${v1}) = ${perimeter.toFixed(2)} cm<br>A = L² = ${v1}² = ${area.toFixed(2)} cm²`;
+                    break;
+                case 'rectangle':
+                    perimeter = 2 * (v1 + v2); 
+                    area = v1 * v2;
+                    formulas = `P = 2(b + h) = 2(${v1} + ${v2}) = ${perimeter.toFixed(2)} cm<br>A = b × h = ${v1} × ${v2} = ${area.toFixed(2)} cm²`;
+                    break;
+                case 'triangle':
+                    perimeter = v1 * 3; 
+                    area = (Math.sqrt(3) / 4) * (v1 * v1);
+                    formulas = `P = 3L = 3(${v1}) = ${perimeter.toFixed(2)} cm<br>A = (√3 ÷ 4) × L² = ${area.toFixed(2)} cm²`;
+                    break;
+                case 'pentagon':
+                    perimeter = v1 * 5; 
+                    area = 1.72048 * (v1 * v1); 
+                    formulas = `P = 5L = 5(${v1}) = ${perimeter.toFixed(2)} cm<br>A ≈ 1.72 × L² = ${area.toFixed(2)} cm²`;
+                    break;
+                case 'circle':
+                    perimeter = 2 * Math.PI * v1; 
+                    area = Math.PI * (v1 * v1);
+                    formulas = `P = 2πr = 2π(${v1}) = ${perimeter.toFixed(2)} cm<br>A = πr² = π(${v1})² = ${area.toFixed(2)} cm²`;
+                    break;
+            }
+            return { area: area.toFixed(2), perimeter: perimeter.toFixed(2), formulas };
+        }
+
+        function displayMath(data) {
+            const panel = document.getElementById('math-results');
+            panel.style.display = 'block';
+            document.getElementById('res-perim').innerText = data.perimeter + " cm";
+            document.getElementById('res-area').innerText = data.area + " cm²";
+            document.getElementById('res-formulas').innerHTML = data.formulas;
+        }
+
+        function generateSkinUI() {
+            const list = document.getElementById('skinList');
+            SKINS.forEach((skin, i) => {
+                const btn = document.createElement('div');
+                btn.className = 'skin-btn' + (i===0 ? ' active' : '');
+                btn.setAttribute('data-skin-index', i);
+                
+                if(skin.type === 'color') {
+                    btn.style.backgroundColor = skin.value;
+                } else {
+                    btn.style.backgroundImage = `url(${skin.url})`;
+                }
+                
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.skin-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    selectedSkin = skin;
+                    if(selectedObject) updateMeshSkin(selectedObject, skin);
+                });
+                
+                list.appendChild(btn);
+            });
+        }
+
+        function updateUIInputs() {
+            const shape = document.getElementById('shapeSelect').value;
+            const lbl = document.getElementById('lbl1');
+            const box2 = document.getElementById('input2-box');
+            
+            box2.style.display = 'none';
+            
+            if (shape === 'rectangle') {
+                lbl.innerText = 'Base (cm)';
+                box2.style.display = 'block';
+            } else if (shape === 'circle') {
+                lbl.innerText = 'Radio (cm)';
+            } else {
+                lbl.innerText = 'Lado (cm)';
+            }
+        }
+
+        function addShape() {
+            if(navigator.vibrate) navigator.vibrate(50);
+            
+            try {
+                confetti({ 
+                    particleCount: 50, 
+                    spread: 60, 
+                    origin: { y: 0.6 },
+                    colors: ['#38bdf8', '#3b82f6', '#8b5cf6']
+                });
+            } catch(e) {
+                console.log('Confetti no disponible');
+            }
+
+            const shape = document.getElementById('shapeSelect').value;
+            const v1 = parseFloat(document.getElementById('dim1').value) || 4;
+            const v2 = parseFloat(document.getElementById('dim2').value) || 6;
+            
+            if(v1 <= 0 || (shape === 'rectangle' && v2 <= 0)) {
+                alert('Por favor ingresa valores mayores a cero');
+                return;
+            }
+            
+            let geometry;
+            
+            switch(shape) {
+                case 'square': 
+                    geometry = new THREE.PlaneGeometry(v1, v1); 
+                    break;
+                case 'rectangle': 
+                    geometry = new THREE.PlaneGeometry(v1, v2); 
+                    break;
+                case 'circle': 
+                    geometry = new THREE.CircleGeometry(v1, 64); 
+                    break;
+                case 'triangle': 
+                    const rTri = v1 / Math.sqrt(3);
+                    geometry = new THREE.CircleGeometry(rTri, 3); 
+                    break;
+                case 'pentagon':
+                    const rPent = v1 / (2 * Math.sin(Math.PI/5));
+                    geometry = new THREE.CircleGeometry(rPent, 5);
+                    break;
+            }
+
+            const material = new THREE.MeshPhongMaterial({ 
+                side: THREE.DoubleSide,
+                flatShading: false
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            
+            mesh.userData = { 
+                shape: shape, 
+                v1: v1, 
+                v2: v2, 
+                skin: JSON.parse(JSON.stringify(selectedSkin))
+            };
+            
+            updateMeshSkin(mesh, selectedSkin);
+
+            const spread = 4;
+            mesh.position.set(
+                (Math.random() - 0.5) * spread, 
+                (Math.random() - 0.5) * spread, 
+                objects.length * 0.05
+            );
+            
+            if(shape === 'triangle') mesh.rotation.z = Math.PI; 
+            if(shape === 'pentagon') mesh.rotation.z = -Math.PI/10;
+
+            scene.add(mesh);
+            objects.push(mesh);
+            selectObject(mesh);
+        }
+
+        function updateMeshSkin(mesh, skin) {
+            if(skin.type === 'color') {
+                mesh.material.map = null;
+                mesh.material.color.set(skin.value);
+                mesh.material.needsUpdate = true;
+            } else {
+                textureLoader.load(
+                    skin.url, 
+                    (tex) => {
+                        tex.colorSpace = THREE.SRGBColorSpace;
+                        mesh.material.color.set(0xffffff);
+                        mesh.material.map = tex;
+                        mesh.material.needsUpdate = true;
+                    },
+                    undefined,
+                    (err) => {
+                        console.error('Error cargando textura:', err);
+                        mesh.material.color.set(selectedSkin.value || '#38bdf8');
+                        mesh.material.needsUpdate = true;
+                    }
+                );
+            }
+            mesh.userData.skin = JSON.parse(JSON.stringify(skin));
+        }
+
+        function selectObject(mesh) {
+            selectedObject = mesh;
+            selectionBox.setFromObject(mesh);
+            selectionBox.visible = true;
+            
+            const data = mesh.userData;
+            const math = calculateMath(data.shape, data.v1, data.v2);
+            displayMath(math);
+
+            const deg = Math.round(THREE.MathUtils.radToDeg(mesh.rotation.z));
+            const normalizedDeg = ((deg % 360) + 360) % 360;
+            document.getElementById('rotation').value = normalizedDeg;
+            document.getElementById('rotation-value').innerText = normalizedDeg + '°';
+        }
+
+        function rotateSelected() {
+            if(!selectedObject) return;
+            const deg = parseInt(document.getElementById('rotation').value);
+            document.getElementById('rotation-value').innerText = deg + '°';
+            selectedObject.rotation.z = THREE.MathUtils.degToRad(deg);
+            selectionBox.update();
+        }
+
+        function clearScene() {
+            if(objects.length === 0) return;
+            
+            if(confirm('¿Deseas eliminar todas las figuras?')) {
+                objects.forEach(o => { 
+                    scene.remove(o); 
+                    if(o.geometry) o.geometry.dispose();
+                    if(o.material) {
+                        if(o.material.map) o.material.map.dispose();
+                        o.material.dispose();
+                    }
+                });
+                objects = [];
+                selectedObject = null;
+                selectionBox.visible = false;
+                document.getElementById('math-results').style.display = 'none';
+            }
+        }
+
+        function setupInteraction() {
+            let isDragging = false;
+            const plane = new THREE.Plane(new THREE.Vector3(0,0,1), 0);
+            const intersection = new THREE.Vector3();
+            const offset = new THREE.Vector3();
+            const canvas = renderer.domElement;
+
+            function getPointerPosition(e) {
+                if(e.touches && e.touches.length > 0) {
+                    return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                }
+                return { x: e.clientX, y: e.clientY };
+            }
+
+            function onDown(e) {
+                e.preventDefault();
+                const pos = getPointerPosition(e);
+                mouse.x = (pos.x / window.innerWidth) * 2 - 1;
+                mouse.y = -(pos.y / window.innerHeight) * 2 + 1;
+                
+                raycaster.setFromCamera(mouse, camera);
+                const hits = raycaster.intersectObjects(objects);
+                
+                if(hits.length > 0) {
+                    isDragging = true;
+                    selectObject(hits[0].object);
+                    raycaster.ray.intersectPlane(plane, intersection);
+                    offset.copy(intersection).sub(hits[0].object.position);
+                } else {
+                    selectedObject = null;
+                    selectionBox.visible = false;
+                    document.getElementById('math-results').style.display = 'none';
+                }
+            }
+
+            function onMove(e) {
+                if(!isDragging || !selectedObject) return;
+                e.preventDefault();
+                
+                const pos = getPointerPosition(e);
+                mouse.x = (pos.x / window.innerWidth) * 2 - 1;
+                mouse.y = -(pos.y / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            if(raycaster.ray.intersectPlane(plane, intersection)) {
+                selectedObject.position.copy(intersection).sub(offset);
+                selectionBox.update();
+            }
+        }
+
+        function onUp() {
+            isDragging = false;
+        }
+        
+        canvas.addEventListener('mousedown', onDown);
+        canvas.addEventListener('mousemove', onMove);
+        canvas.addEventListener('mouseup', onUp);
+        
+        canvas.addEventListener('touchstart', onDown, {passive: false});
+        canvas.addEventListener('touchmove', onMove, {passive: false});
+        canvas.addEventListener('touchend', onUp);
+        canvas.addEventListener('touchcancel', onUp);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('load', init);
+</script>
